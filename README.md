@@ -82,6 +82,32 @@ plugins:
             set_upstream: echo
     ```
 
+- 内置插件：`transform`
+  - 数据面变换能力：
+    - JSON/XML 转换（演示实现，可替换为严格库）、字段脱敏（顶层字段掩码）、单位转换（示例占位）
+    - 压缩/解压：`gzip_compress`、`gzip_decompress`
+    - gRPC：`add_grpc_metadata`（请求头注入）、`grpc_status_map`（基于 `grpc-status` trailer 将 gRPC 状态映射为 HTTP 状态码）
+  - 示例：
+    ```yaml
+    plugins:
+      available:
+        - name: transform
+          config:
+            # 先解压再变换
+            gzip_decompress: true
+            # JSON 顶层字段脱敏
+            mask_fields: ["password", "token"]
+            # 变换完成后重新压缩
+            gzip_compress: true
+            # gRPC：注入元数据与状态码映射
+            add_grpc_metadata:
+              x-request-id: ${some-id}
+            grpc_status_map:
+              "0": 200   # OK
+              "7": 403   # PERMISSION_DENIED
+              "16": 401  # UNAUTHENTICATED
+    ```
+
 说明：当前插件链为全局链（按 `plugins.available` 顺序生效）。如需“每条路由单独的插件链”，可扩展 `RouteConfig.Plugins` 的装配逻辑。
 
 ### gRPC
