@@ -20,5 +20,9 @@ routes:
     plugins: []
 
 plugins:
-  available: []
+  available:
+    - name: rewrite
+      config:
+        add_headers:
+          X-AGW: go-agw
 
