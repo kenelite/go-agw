@@ -35,12 +35,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if !r.preflight(w, req, i) {
 			return
 		}
-        // allow plugin to override upstream
-        upstreamName := rt.UpstreamRef
-        if name, ok := plugin.UpstreamOverrideFrom(req.Context()); ok && name != "" {
-            upstreamName = name
-        }
-        ups, ok := r.upstream.Get(upstreamName)
+		// allow plugin to override upstream
+		upstreamName := rt.UpstreamRef
+		if name, ok := plugin.UpstreamOverrideFrom(req.Context()); ok && name != "" {
+			upstreamName = name
+		}
+		ups, ok := r.upstream.Get(upstreamName)
 		if !ok || len(ups.Targets) == 0 {
 			http.Error(w, "upstream not found", http.StatusBadGateway)
 			return

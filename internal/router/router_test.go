@@ -50,9 +50,9 @@ func TestRouterProxy(t *testing.T) {
 	if rec.Body.String() != "ok" {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
-    if rec.Header().Get("X-Test") != "1" {
-        t.Fatalf("expected header X-Test injected by rewrite plugin")
-    }
+	if rec.Header().Get("X-Test") != "1" {
+		t.Fatalf("expected header X-Test injected by rewrite plugin")
+	}
 }
 
 func TestRouterRateLimit(t *testing.T) {
