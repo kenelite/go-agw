@@ -1,0 +1,24 @@
+server:
+  http_addr: ":8080"
+  admin_addr: ":9000"
+
+observability:
+  log_level: "debug"
+
+upstreams:
+  - name: echo
+    targets: ["http://httpbin.org"]
+    timeout_ms: 5000
+
+routes:
+  - path: "/"
+    methods: ["GET"]
+    upstream: "echo"
+    rate_limit:
+      rps: 100
+      burst: 200
+    plugins: []
+
+plugins:
+  available: []
+
