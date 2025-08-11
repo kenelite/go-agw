@@ -2,6 +2,7 @@ package router
 
 import (
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -88,26 +89,38 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		defer resp.Body.Close()
-		// Prepare trailers for downstream if upstream provided any
-		if len(resp.Trailer) > 0 {
-			for k := range resp.Trailer {
+		// buffer upstream response for plugin transformations
+		body, _ := ioutil.ReadAll(resp.Body)
+		prc.Response = &plugin.Response{
+			StatusCode: resp.StatusCode,
+			Header:     cloneHeader(resp.Header),
+			Body:       body,
+			Trailer:    cloneHeader(resp.Trailer),
+		}
+
+		// plugins: after (allow transformations)
+		for _, p := range r.plugins.Chain() {
+			p.AfterDispatch(prc)
+		}
+
+		// sanitize hop-by-hop headers and write response
+		removeHopByHopHeaders(prc.Response.Header)
+		// announce trailers first
+		if len(prc.Response.Trailer) > 0 {
+			for k := range prc.Response.Trailer {
 				w.Header().Add("Trailer", k)
 			}
 		}
-		// copy response headers except Trailer (we already declared it above)
-		copyHeaderExcept(w.Header(), resp.Header, map[string]struct{}{"Trailer": {}})
-		w.WriteHeader(resp.StatusCode)
-		_, _ = io.Copy(w, resp.Body)
-		// set trailer values after body is written
-		for k, vv := range resp.Trailer {
+		copyHeaderExcept(w.Header(), prc.Response.Header, map[string]struct{}{"Trailer": {}, "Content-Length": {}})
+		// Avoid stale Content-Length after modifications
+		w.Header().Del("Content-Length")
+		w.WriteHeader(prc.Response.StatusCode)
+		_, _ = io.Copy(w, strings.NewReader(string(prc.Response.Body)))
+		// write trailers
+		for k, vv := range prc.Response.Trailer {
 			for _, v := range vv {
 				w.Header().Add(k, v)
 			}
-		}
-
-		// plugins: after
-		for _, p := range r.plugins.Chain() {
-			p.AfterDispatch(prc)
 		}
 		return
 	}
