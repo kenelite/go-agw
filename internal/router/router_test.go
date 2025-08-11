@@ -37,6 +37,9 @@ func newTestRouter(t *testing.T, backend http.Handler) *Router {
 
 func TestRouterProxy(t *testing.T) {
 	backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if v := r.Header.Get("X-Test"); v != "" {
+			w.Header().Set("X-Test", v)
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
@@ -79,5 +82,48 @@ func TestRouterRateLimit(t *testing.T) {
 	r.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusTooManyRequests {
 		t.Fatalf("second request expected 429 got %d", rec2.Code)
+	}
+}
+
+func TestRewritePluginUpstreamOverride(t *testing.T) {
+	// backend A returns body A, backend B returns body B
+	backendA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("A"))
+	}))
+	defer backendA.Close()
+	backendB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("B"))
+	}))
+	defer backendB.Close()
+
+	logger := observability.NewLogger(nil)
+	upm, err := upstream.NewManager([]config.UpstreamConfig{
+		{Name: "a", Targets: []string{backendA.URL}, Timeout: 2000},
+		{Name: "b", Targets: []string{backendB.URL}, Timeout: 2000},
+	}, logger)
+	if err != nil {
+		t.Fatalf("upstream manager: %v", err)
+	}
+	rr := scheduler.NewRoundRobin()
+	pm := plugin.NewManager(logger)
+	// rewrite to force upstream b
+	_ = pm.Init(config.PluginsConfig{Available: []config.PluginRef{{Name: "rewrite", Config: map[string]any{"set_upstream": "b"}}}})
+	metrics := observability.NewMetrics()
+	routes := []config.RouteConfig{{Path: "/", Methods: []string{"GET"}, UpstreamRef: "a"}}
+	r, err := NewRouter(routes, upm, rr, pm, metrics, logger)
+	if err != nil {
+		t.Fatalf("router: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://agw/", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected code: %d", rec.Code)
+	}
+	if rec.Body.String() != "B" {
+		t.Fatalf("expected response from upstream b, got %q", rec.Body.String())
 	}
 }

@@ -35,17 +35,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if !r.preflight(w, req, i) {
 			return
 		}
-		// allow plugin to override upstream
-		upstreamName := rt.UpstreamRef
-		if name, ok := plugin.UpstreamOverrideFrom(req.Context()); ok && name != "" {
-			upstreamName = name
-		}
-		ups, ok := r.upstream.Get(upstreamName)
-		if !ok || len(ups.Targets) == 0 {
-			http.Error(w, "upstream not found", http.StatusBadGateway)
-			return
-		}
-		// plugins: before
+		// plugins: before (plugins may mutate request and choose upstream)
 		prc := &plugin.RequestContext{Context: req.Context(), Writer: w, Request: req}
 		for _, p := range r.plugins.Chain() {
 			handled, err := p.BeforeDispatch(prc)
@@ -55,6 +45,16 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if handled {
 				return
 			}
+		}
+		// choose upstream after plugins
+		upstreamName := rt.UpstreamRef
+		if name, ok := plugin.UpstreamOverrideFrom(prc.Request.Context()); ok && name != "" {
+			upstreamName = name
+		}
+		ups, ok := r.upstream.Get(upstreamName)
+		if !ok || len(ups.Targets) == 0 {
+			http.Error(w, "upstream not found", http.StatusBadGateway)
+			return
 		}
 
 		// pick target
@@ -66,15 +66,15 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		target := ups.Targets[idx]
 
 		// proxy minimal
-		outReq := req.Clone(req.Context())
+		outReq := prc.Request.Clone(prc.Request.Context())
 		outReq.URL.Scheme = target.URL.Scheme
 		outReq.URL.Host = target.URL.Host
-		outReq.URL.Path = singleJoiningSlash(target.URL.Path, req.URL.Path)
+		outReq.URL.Path = singleJoiningSlash(target.URL.Path, prc.Request.URL.Path)
 		outReq.RequestURI = ""
 		// sanitize and adjust headers
-		outReq.Header = cloneHeader(req.Header)
+		outReq.Header = cloneHeader(prc.Request.Header)
 		removeHopByHopHeaders(outReq.Header)
-		if isGRPC(req) {
+		if isGRPC(prc.Request) {
 			// gRPC requires TE: trailers on HTTP/2; set to be safe for upstreams that expect it
 			outReq.Header.Set("TE", "trailers")
 		}
