@@ -25,7 +25,7 @@ func newTestRouter(t *testing.T, backend http.Handler) *Router {
 	}
 	rr := scheduler.NewRoundRobin()
 	pm := plugin.NewManager(logger)
-	_ = pm.Init(config.PluginsConfig{})
+	_ = pm.Init(config.PluginsConfig{Available: []config.PluginRef{{Name: "rewrite", Config: map[string]any{"add_headers": map[string]any{"X-Test": "1"}}}}})
 	metrics := observability.NewMetrics()
 	routes := []config.RouteConfig{{Path: "/", Methods: []string{"GET"}, UpstreamRef: "echo"}}
 	r, err := NewRouter(routes, upm, rr, pm, metrics, logger)
@@ -50,6 +50,9 @@ func TestRouterProxy(t *testing.T) {
 	if rec.Body.String() != "ok" {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
+    if rec.Header().Get("X-Test") != "1" {
+        t.Fatalf("expected header X-Test injected by rewrite plugin")
+    }
 }
 
 func TestRouterRateLimit(t *testing.T) {

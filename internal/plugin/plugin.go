@@ -35,9 +35,21 @@ type Manager struct {
 func NewManager(logger *observability.Logger) *Manager { return &Manager{logger: logger} }
 
 func (m *Manager) Init(cfg config.PluginsConfig) error {
-    // For now we have no built-ins registered automatically.
-    // In future, this could dynamically load via Go plugins or compile-time registry.
     m.plugins = []Plugin{}
+    for _, pref := range cfg.Available {
+        ctor := getConstructor(pref.Name)
+        if ctor == nil {
+            if m.logger != nil { m.logger.Warnw("unknown plugin", "name", pref.Name) }
+            continue
+        }
+        p := ctor()
+        if err := p.Init(pref.Config); err != nil {
+            if m.logger != nil { m.logger.Errorw("plugin init failed", "name", pref.Name, "err", err) }
+            continue
+        }
+        m.plugins = append(m.plugins, p)
+        if m.logger != nil { m.logger.Infow("plugin loaded", "name", p.Name()) }
+    }
     return nil
 }
 
