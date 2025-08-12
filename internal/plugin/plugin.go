@@ -15,6 +15,11 @@ type RequestContext struct {
 	Request *http.Request
 	// Plugin shared storage could be added later
 	Response *Response
+    Logger   *observability.Logger
+    Metrics  *observability.Metrics
+    // Resolved upstream info
+    UpstreamName   string
+    UpstreamTarget string
 }
 
 // Plugin defines request lifecycle hooks.

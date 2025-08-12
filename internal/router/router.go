@@ -65,6 +65,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		target := ups.Targets[idx]
+		// enrich plugin context for observability
+		prc.Logger = r.logger
+		prc.Metrics = r.metrics
+		prc.UpstreamName = upstreamName
+		prc.UpstreamTarget = target.URL.String()
 
 		// proxy minimal
 		outReq := prc.Request.Clone(prc.Request.Context())
