@@ -10,3 +10,8 @@ func Register(name string, ctor Constructor) { registry[name] = ctor }
 
 func getConstructor(name string) Constructor { return registry[name] }
 
+func init() {
+    // Ensure observability plugin is available by default
+    Register("observability", func() Plugin { return &ObservabilityPlugin{} })
+}
+

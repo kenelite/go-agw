@@ -9,6 +9,8 @@
 - 限流：按“客户端 IP + 路径”的令牌桶限流，支持 per-route 配置
 - 可观测性：/healthz、/metrics（简单计数器）、/config 管理接口
 - gRPC 支持：数据面开启 h2c；转发时处理 gRPC Header/Trailer
+- 请求日志/审计与指标：可通过插件扩展记录结构化日志、计数指标
+- Trace/Baggage 与 ID 注入：统一 Request-ID/Correlation-ID，支持扩展 Trace/Baggage 注入
 
 ### 快速开始
 ```bash
@@ -108,6 +110,23 @@ plugins:
               "16": 401  # UNAUTHENTICATED
     ```
 
+- 内置插件：`observability`
+  - 可观测性与治理能力：
+    - 请求日志/审计（方法、路径、状态码、耗时、上游信息）
+    - 指标上报（示例内置为简单计数器，可扩展为 Prometheus/OpenTelemetry）
+    - 统一 Request-ID/Correlation-ID 注入与透传
+  - 示例：
+    ```yaml
+    plugins:
+      available:
+        - name: observability
+          config:
+            request_id_header: X-Request-ID
+            correlation_id_header: X-Correlation-ID
+            log: true
+            metrics_labels:
+              service: checkout
+    ```
 说明：当前插件链为全局链（按 `plugins.available` 顺序生效）。如需“每条路由单独的插件链”，可扩展 `RouteConfig.Plugins` 的装配逻辑。
 
 ### gRPC
